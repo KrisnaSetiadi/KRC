@@ -23,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
-import { Download, Search, ArrowUpDown, ChevronDown, Calendar as CalendarIcon, FileDown, MoreHorizontal, Trash2, Edit } from "lucide-react";
+import { Download, Search, ArrowUpDown, ChevronDown, Calendar as CalendarIcon, FileDown, MoreHorizontal, Trash2, Edit, FileText, FileType } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -37,7 +37,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
-import { format } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, startOfYesterday, endOfYesterday } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -56,12 +56,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { Document, Packer, Paragraph, TextRun, ImageRun } from 'docx';
+import { saveAs } from 'file-saver';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Separator } from "../ui/separator";
 
 type SortKey = keyof Omit<Submission, 'images'> | "";
 type SortDirection = "asc" | "desc";
 
 const editSubmissionSchema = z.object({
-  name: z.string().min(2, "Nama harus memiliki setidaknya 2 karakter."),
+  userName: z.string().min(2, "Nama harus memiliki setidaknya 2 karakter."),
   description: z.string().min(10, "Deskripsi harus memiliki setidaknya 10 karakter."),
 });
 
@@ -74,7 +78,8 @@ export function SubmissionTable() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
       images: true,
-      name: true,
+      userName: true,
+      userDivision: true,
       description: true,
       timestamp: true,
   });
@@ -111,7 +116,7 @@ export function SubmissionTable() {
         const link = document.createElement("a");
         link.href = imageDataUrl;
         const fileExtension = imageDataUrl.split(';')[0].split('/')[1];
-        link.download = `submission-${submission.name.replace(/\s+/g, '_')}-${submission.id.substring(0,8)}-image-${index + 1}.${fileExtension}`;
+        link.download = `submission-${submission.userName.replace(/\s+/g, '_')}-${submission.id.substring(0,8)}-image-${index + 1}.${fileExtension}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -124,8 +129,9 @@ export function SubmissionTable() {
     if (filter) {
       result = result.filter(
         (s) =>
-          s.name.toLowerCase().includes(filter.toLowerCase()) ||
-          s.description.toLowerCase().includes(filter.toLowerCase())
+          (s.userName || "").toLowerCase().includes(filter.toLowerCase()) ||
+          (s.userDivision || "").toLowerCase().includes(filter.toLowerCase()) ||
+          (s.description || "").toLowerCase().includes(filter.toLowerCase())
       );
     }
 
@@ -148,8 +154,8 @@ export function SubmissionTable() {
 
     if (sortKey) {
       result.sort((a, b) => {
-        const valA = a[sortKey];
-        const valB = b[sortKey];
+        const valA = a[sortKey as keyof Submission] || "";
+        const valB = b[sortKey as keyof Submission] || "";
         if (valA < valB) return sortDirection === "asc" ? -1 : 1;
         if (valA > valB) return sortDirection === "asc" ? 1 : -1;
         return 0;
@@ -166,14 +172,15 @@ export function SubmissionTable() {
   const downloadFilteredDataAsCSV = () => {
     if (filteredAndSortedSubmissions.length === 0) return;
 
-    const headers = ["ID", "Name", "Description", "Timestamp"];
+    const headers = ["ID", "Name", "Division", "Description", "Timestamp"];
     const csvRows = [headers.join(",")];
 
     for (const submission of filteredAndSortedSubmissions) {
       const values = [
         `"${submission.id}"`,
-        `"${submission.name.replace(/"/g, '""')}"`,
-        `"${submission.description.replace(/"/g, '""')}"`,
+        `"${(submission.userName || "").replace(/"/g, '""')}"`,
+        `"${(submission.userDivision || "").replace(/"/g, '""')}"`,
+        `"${(submission.description || "").replace(/"/g, '""')}"`,
         `"${new Date(submission.timestamp).toLocaleString()}"`
       ];
       csvRows.push(values.join(","));
@@ -181,14 +188,51 @@ export function SubmissionTable() {
 
     const csvString = csvRows.join("\n");
     const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `submissions_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const date = new Date().toISOString().split('T')[0];
+    saveAs(blob, `Data Order dan ${date}.csv`);
+  };
+
+  const downloadFilteredDataAsWord = async () => {
+    if (filteredAndSortedSubmissions.length === 0) return;
+
+    const sections = await Promise.all(filteredAndSortedSubmissions.map(async (submission, index) => {
+        const imageRuns = await Promise.all(submission.images.map(async (imgDataUrl) => {
+            const response = await fetch(imgDataUrl);
+            const imageBuffer = await response.arrayBuffer();
+            return new ImageRun({
+                data: imageBuffer,
+                transformation: {
+                    width: 200,
+                    height: 200,
+                },
+            });
+        }));
+
+        return {
+            children: [
+                new Paragraph({
+                    children: [new TextRun({ text: `Laporan #${index + 1}`, bold: true, size: 28 })],
+                    spacing: { after: 200 },
+                }),
+                new Paragraph({ text: `Nama: ${submission.userName || ""}` }),
+                new Paragraph({ text: `Divisi: ${submission.userDivision || ""}` }),
+                new Paragraph({ text: `Waktu: ${new Date(submission.timestamp).toLocaleString()}` }),
+                new Paragraph({ text: `Deskripsi: ${submission.description || ""}` }),
+                new Paragraph({ text: `Gambar:`, spacing: { before: 200, after: 200 } }),
+                new Paragraph({ children: imageRuns }),
+                new Paragraph({ text: "---", spacing: { before: 400, after: 400 } }),
+            ],
+        };
+    }));
+    
+    const doc = new Document({
+        sections: sections
+    });
+
+    Packer.toBlob(doc).then(blob => {
+        const date = new Date().toISOString().split('T')[0];
+        saveAs(blob, `Data Order dan ${date}.docx`);
+    });
   };
   
   const handleSelectAll = (checked: boolean) => {
@@ -229,7 +273,7 @@ export function SubmissionTable() {
   const openEditDialog = (submission: Submission) => {
     setSelectedSubmission(submission);
     editForm.reset({
-      name: submission.name,
+      userName: submission.userName,
       description: submission.description,
     });
     setIsEditDialogOpen(true);
@@ -240,7 +284,7 @@ export function SubmissionTable() {
     try {
       const updatedSubmissions = submissions.map(s => {
         if (s.id === selectedSubmission.id) {
-          return { ...s, ...values, timestamp: new Date().toISOString() };
+          return { ...s, userName: values.userName, description: values.description, timestamp: new Date().toISOString() };
         }
         return s;
       });
@@ -260,10 +304,41 @@ export function SubmissionTable() {
     }
   };
 
+  const handleDatePreset = (preset: string) => {
+    const now = new Date();
+    switch (preset) {
+        case 'today':
+            setDateRange({ from: now, to: now });
+            break;
+        case 'yesterday':
+            const yesterday = subDays(now, 1);
+            setDateRange({ from: yesterday, to: yesterday });
+            break;
+        case 'last7':
+            setDateRange({ from: subDays(now, 6), to: now });
+            break;
+        case 'last30':
+            setDateRange({ from: subDays(now, 29), to: now });
+            break;
+        case 'thisMonth':
+            setDateRange({ from: startOfMonth(now), to: endOfMonth(now) });
+            break;
+        case 'lastMonth':
+            const lastMonthStart = startOfMonth(subDays(startOfMonth(now), 1));
+            const lastMonthEnd = endOfMonth(lastMonthStart);
+            setDateRange({ from: lastMonthStart, to: lastMonthEnd });
+            break;
+        default:
+            setDateRange(undefined);
+    }
+  };
+
+
   const TableHeaderContent = [
     { key: "checkbox", label: "", sortable: false },
     { key: "images", label: "Gambar", sortable: false },
-    { key: "name", label: "Nama", sortable: true },
+    { key: "userName", label: "Nama", sortable: true },
+    { key: "userDivision", label: "Divisi", sortable: true },
     { key: "description", label: "Deskripsi", sortable: true },
     { key: "timestamp", label: "Waktu", sortable: true },
   ];
@@ -293,7 +368,7 @@ export function SubmissionTable() {
                     <Button
                         id="date"
                         variant={"outline"}
-                        className="w-full sm:w-[240px] justify-start text-left font-normal"
+                        className="w-full sm:w-[300px] justify-start text-left font-normal"
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {dateRange?.from ? (
@@ -310,7 +385,15 @@ export function SubmissionTable() {
                         )}
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="flex w-auto flex-row p-2" align="start">
+                    <div className="flex flex-col space-y-2 pr-4 border-r">
+                         <Button variant="ghost" className="justify-start" onClick={() => handleDatePreset('today')}>Hari ini</Button>
+                         <Button variant="ghost" className="justify-start" onClick={() => handleDatePreset('yesterday')}>Kemarin</Button>
+                         <Button variant="ghost" className="justify-start" onClick={() => handleDatePreset('last7')}>7 hari terakhir</Button>
+                         <Button variant="ghost" className="justify-start" onClick={() => handleDatePreset('last30')}>30 hari terakhir</Button>
+                         <Button variant="ghost" className="justify-start" onClick={() => handleDatePreset('thisMonth')}>Bulan ini</Button>
+                         <Button variant="ghost" className="justify-start" onClick={() => handleDatePreset('lastMonth')}>Bulan lalu</Button>
+                    </div>
                     <Calendar
                         initialFocus
                         mode="range"
@@ -346,10 +429,24 @@ export function SubmissionTable() {
                   </AlertDialogContent>
                 </AlertDialog>
              )}
-             <Button variant="outline" onClick={downloadFilteredDataAsCSV} disabled={filteredAndSortedSubmissions.length === 0} className="w-full sm:w-auto">
-                <FileDown className="mr-2 h-4 w-4" />
-                Download CSV
-              </Button>
+             <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" disabled={filteredAndSortedSubmissions.length === 0} className="w-full sm:w-auto">
+                        <FileDown className="mr-2 h-4 w-4" />
+                        Download
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={downloadFilteredDataAsCSV}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        <span>Download sebagai .CSV</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={downloadFilteredDataAsWord}>
+                        <FileType className="mr-2 h-4 w-4" />
+                        <span>Download sebagai .Word</span>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full sm:w-auto">
@@ -400,7 +497,7 @@ export function SubmissionTable() {
             <TableBody>
               {filteredAndSortedSubmissions.length > 0 ? (
                 filteredAndSortedSubmissions.map((submission) => (
-                  <TableRow key={submission.id} data-state={selectedSubmissions.includes(submission.id) && "selected"}>
+                  <TableRow key={submission.id} data-state={selectedSubmissions.includes(submission.id) ? "selected" : undefined}>
                     <TableCell className="px-4">
                         <Checkbox
                             checked={selectedSubmissions.includes(submission.id)}
@@ -421,7 +518,7 @@ export function SubmissionTable() {
                         </DialogTrigger>
                         <DialogContent className="max-w-4xl">
                           <DialogHeader>
-                            <DialogTitle>Gambar milik {submission.name}</DialogTitle>
+                            <DialogTitle>Gambar milik {submission.userName}</DialogTitle>
                           </DialogHeader>
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4 max-h-[70vh] overflow-y-auto">
                             {submission.images.map((img, index) => (
@@ -433,7 +530,8 @@ export function SubmissionTable() {
                         </DialogContent>
                       </Dialog>
                     </TableCell>}
-                    {columnVisibility.name && <TableCell className="font-medium">{submission.name}</TableCell>}
+                    {columnVisibility.userName && <TableCell className="font-medium">{submission.userName}</TableCell>}
+                    {columnVisibility.userDivision && <TableCell>{submission.userDivision}</TableCell>}
                     {columnVisibility.description && <TableCell className="max-w-[150px] md:max-w-xs truncate">{submission.description}</TableCell>}
                     {columnVisibility.timestamp && <TableCell>{new Date(submission.timestamp).toLocaleString()}</TableCell>}
                     <TableCell>
@@ -501,7 +599,7 @@ export function SubmissionTable() {
                 <form onSubmit={editForm.handleSubmit(handleUpdateSubmission)} className="space-y-4 py-4">
                     <FormField
                         control={editForm.control}
-                        name="name"
+                        name="userName"
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Nama</FormLabel>

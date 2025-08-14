@@ -2,7 +2,9 @@ export type UserRole = "admin" | "user";
 
 export interface Submission {
   id: string;
-  name: string;
+  userId: string;
+  userName: string;
+  userDivision: string;
   images: string[];
   description: string;
   timestamp: string;

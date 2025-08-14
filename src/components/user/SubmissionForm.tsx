@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -15,13 +15,13 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Upload, X } from "lucide-react";
 import type { Submission } from "@/lib/types";
+import { AuthContext } from "@/context/AuthContext";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_FILES = 5;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 const formSchema = z.object({
-  name: z.string().min(2, "Nama harus memiliki setidaknya 2 karakter.").max(50, "Nama harus kurang dari 50 karakter."),
   description: z.string().min(10, "Deskripsi harus memiliki setidaknya 10 karakter.").max(500, "Deskripsi harus kurang dari 500 karakter."),
   images: z.custom<FileList>()
     .refine(files => files?.length > 0, "Setidaknya satu gambar diperlukan.")
@@ -36,11 +36,11 @@ export function SubmissionForm() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const authContext = useContext(AuthContext);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
       description: "",
     },
   });
@@ -92,11 +92,21 @@ export function SubmissionForm() {
   };
 
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
+    if (!authContext?.currentUser) {
+       toast({
+        title: "Kesalahan",
+        description: "Tidak dapat mengidentifikasi pengguna. Silakan login kembali.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsSubmitting(true);
     try {
       const newSubmission: Submission = {
         id: uuidv4(),
-        name: data.name,
+        userId: authContext.currentUser.id,
+        userName: authContext.currentUser.name,
+        userDivision: authContext.currentUser.division,
         description: data.description,
         images: imagePreviews,
         timestamp: new Date().toISOString(),
@@ -132,19 +142,6 @@ export function SubmissionForm() {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nama</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Masukkan nama Anda" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
              <FormItem>
                 <FormLabel>Gambar</FormLabel>
                 <FormControl>
@@ -188,7 +185,7 @@ export function SubmissionForm() {
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+            <Button type="submit" disabled={isSubmitting || !authContext?.currentUser} className="w-full sm:w-auto">
               {isSubmitting ? "Mengirim..." : "Kirim Formulir"}
             </Button>
           </form>
