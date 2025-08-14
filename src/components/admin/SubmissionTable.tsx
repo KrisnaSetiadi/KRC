@@ -15,6 +15,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -22,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
-import { Download, Search, ArrowUpDown, ChevronDown, Calendar as CalendarIcon, FileDown } from "lucide-react";
+import { Download, Search, ArrowUpDown, ChevronDown, Calendar as CalendarIcon, FileDown, MoreHorizontal, Trash2, Edit } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -30,14 +31,40 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
 
 type SortKey = keyof Omit<Submission, 'images'> | "";
 type SortDirection = "asc" | "desc";
+
+const editSubmissionSchema = z.object({
+  name: z.string().min(2, "Nama harus memiliki setidaknya 2 karakter."),
+  description: z.string().min(10, "Deskripsi harus memiliki setidaknya 10 karakter."),
+});
+
 
 export function SubmissionTable() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -51,10 +78,22 @@ export function SubmissionTable() {
       description: true,
       timestamp: true,
   });
+  const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  const { toast } = useToast();
 
-  useEffect(() => {
+  const editForm = useForm<z.infer<typeof editSubmissionSchema>>({
+    resolver: zodResolver(editSubmissionSchema),
+  });
+
+  const fetchSubmissions = () => {
     const storedSubmissions: Submission[] = JSON.parse(localStorage.getItem("submissions") || "[]");
     setSubmissions(storedSubmissions);
+  };
+
+  useEffect(() => {
+    fetchSubmissions();
   }, []);
 
   const handleSort = (key: SortKey) => {
@@ -120,20 +159,109 @@ export function SubmissionTable() {
     return result;
   }, [submissions, filter, dateRange, sortKey, sortDirection]);
 
-  const downloadFilteredData = () => {
-    const dataStr = JSON.stringify(filteredAndSortedSubmissions, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
+  useEffect(() => {
+    setSelectedSubmissions([]);
+  }, [filter, dateRange]);
+
+  const downloadFilteredDataAsCSV = () => {
+    if (filteredAndSortedSubmissions.length === 0) return;
+
+    const headers = ["ID", "Name", "Description", "Timestamp"];
+    const csvRows = [headers.join(",")];
+
+    for (const submission of filteredAndSortedSubmissions) {
+      const values = [
+        `"${submission.id}"`,
+        `"${submission.name.replace(/"/g, '""')}"`,
+        `"${submission.description.replace(/"/g, '""')}"`,
+        `"${new Date(submission.timestamp).toLocaleString()}"`
+      ];
+      csvRows.push(values.join(","));
+    }
+
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `filtered_submissions_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `submissions_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+  
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedSubmissions(filteredAndSortedSubmissions.map(s => s.id));
+    } else {
+      setSelectedSubmissions([]);
+    }
+  };
+
+  const handleSelectSingle = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedSubmissions(prev => [...prev, id]);
+    } else {
+      setSelectedSubmissions(prev => prev.filter(subId => subId !== id));
+    }
+  };
+
+  const deleteSubmissions = (ids: string[]) => {
+    try {
+      const updatedSubmissions = submissions.filter(s => !ids.includes(s.id));
+      localStorage.setItem("submissions", JSON.stringify(updatedSubmissions));
+      setSubmissions(updatedSubmissions);
+      setSelectedSubmissions([]);
+      toast({
+        title: "Sukses",
+        description: `${ids.length} data upload berhasil dihapus.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Kesalahan",
+        description: "Gagal menghapus data upload.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openEditDialog = (submission: Submission) => {
+    setSelectedSubmission(submission);
+    editForm.reset({
+      name: submission.name,
+      description: submission.description,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateSubmission = (values: z.infer<typeof editSubmissionSchema>) => {
+    if (!selectedSubmission) return;
+    try {
+      const updatedSubmissions = submissions.map(s => {
+        if (s.id === selectedSubmission.id) {
+          return { ...s, ...values, timestamp: new Date().toISOString() };
+        }
+        return s;
+      });
+      localStorage.setItem("submissions", JSON.stringify(updatedSubmissions));
+      setSubmissions(updatedSubmissions);
+      setIsEditDialogOpen(false);
+      toast({
+        title: "Sukses",
+        description: "Data upload berhasil diperbarui.",
+      });
+    } catch (error) {
+      toast({
+        title: "Kesalahan",
+        description: "Gagal memperbarui data upload.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const TableHeaderContent = [
+    { key: "checkbox", label: "", sortable: false },
     { key: "images", label: "Gambar", sortable: false },
     { key: "name", label: "Nama", sortable: true },
     { key: "description", label: "Deskripsi", sortable: true },
@@ -141,6 +269,7 @@ export function SubmissionTable() {
   ];
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle>Data upload</CardTitle>
@@ -164,7 +293,7 @@ export function SubmissionTable() {
                     <Button
                         id="date"
                         variant={"outline"}
-                        className="w-[240px] justify-start text-left font-normal sm:w-auto"
+                        className="w-full sm:w-[240px] justify-start text-left font-normal"
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {dateRange?.from ? (
@@ -194,21 +323,43 @@ export function SubmissionTable() {
             </Popover>
             <Button onClick={() => setDateRange(undefined)} variant="ghost" disabled={!dateRange}>Hapus</Button>
           </div>
-          <div className="flex gap-2 ml-auto">
-             <Button variant="outline" onClick={downloadFilteredData} disabled={filteredAndSortedSubmissions.length === 0}>
+          <div className="flex gap-2 ml-auto w-full sm:w-auto flex-wrap">
+             {selectedSubmissions.length > 0 && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full sm:w-auto">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Hapus ({selectedSubmissions.length})
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Tindakan ini akan menghapus {selectedSubmissions.length} data upload yang dipilih secara permanen.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Batal</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteSubmissions(selectedSubmissions)}>Lanjutkan</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+             )}
+             <Button variant="outline" onClick={downloadFilteredDataAsCSV} disabled={filteredAndSortedSubmissions.length === 0} className="w-full sm:w-auto">
                 <FileDown className="mr-2 h-4 w-4" />
-                Ekspor
+                Download CSV
               </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="w-full sm:w-auto">
                   Kolom <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Alihkan kolom</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {TableHeaderContent.map((col) => (
+                {TableHeaderContent.slice(1).map((col) => (
                     <DropdownMenuCheckboxItem
                       key={col.key}
                       className="capitalize"
@@ -229,7 +380,15 @@ export function SubmissionTable() {
           <Table>
             <TableHeader>
               <TableRow>
-                {TableHeaderContent.map((col) => columnVisibility[col.key] && (
+                 <TableHead className="px-4">
+                    <Checkbox
+                        checked={selectedSubmissions.length > 0 && selectedSubmissions.length === filteredAndSortedSubmissions.length}
+                        onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                        aria-label="Pilih semua"
+                        disabled={filteredAndSortedSubmissions.length === 0}
+                    />
+                </TableHead>
+                {TableHeaderContent.slice(1).map((col) => columnVisibility[col.key] && (
                   <TableHead key={col.key} onClick={() => col.sortable && handleSort(col.key as SortKey)} className={col.sortable ? "cursor-pointer" : ""}>
                     {col.label}
                     {col.sortable && <ArrowUpDown className="ml-2 h-4 w-4 inline opacity-50" />}
@@ -241,7 +400,14 @@ export function SubmissionTable() {
             <TableBody>
               {filteredAndSortedSubmissions.length > 0 ? (
                 filteredAndSortedSubmissions.map((submission) => (
-                  <TableRow key={submission.id}>
+                  <TableRow key={submission.id} data-state={selectedSubmissions.includes(submission.id) && "selected"}>
+                    <TableCell className="px-4">
+                        <Checkbox
+                            checked={selectedSubmissions.includes(submission.id)}
+                            onCheckedChange={(checked) => handleSelectSingle(submission.id, !!checked)}
+                            aria-label="Pilih baris"
+                        />
+                    </TableCell>
                     {columnVisibility.images && <TableCell>
                       <Dialog>
                         <DialogTrigger asChild>
@@ -268,18 +434,55 @@ export function SubmissionTable() {
                       </Dialog>
                     </TableCell>}
                     {columnVisibility.name && <TableCell className="font-medium">{submission.name}</TableCell>}
-                    {columnVisibility.description && <TableCell className="max-w-[200px] md:max-w-xs truncate">{submission.description}</TableCell>}
+                    {columnVisibility.description && <TableCell className="max-w-[150px] md:max-w-xs truncate">{submission.description}</TableCell>}
                     {columnVisibility.timestamp && <TableCell>{new Date(submission.timestamp).toLocaleString()}</TableCell>}
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => downloadImages(submission)}>
-                        <Download className="h-4 w-4" />
-                      </Button>
+                       <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Buka menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Tindakan</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => downloadImages(submission)}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    <span>Download Gambar</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEditDialog(submission)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    <span>Edit</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            <span>Hapus</span>
+                                        </DropdownMenuItem>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                        <AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data upload secara permanen.
+                                        </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => deleteSubmissions([submission.id])}>Lanjutkan</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={Object.values(columnVisibility).filter(v => v).length + 1} className="h-24 text-center">
+                  <TableCell colSpan={Object.values(columnVisibility).filter(v => v).length + 2} className="h-24 text-center">
                     Tidak ada data upload yang ditemukan.
                   </TableCell>
                 </TableRow>
@@ -289,5 +492,51 @@ export function SubmissionTable() {
         </div>
       </CardContent>
     </Card>
+    <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+                <DialogTitle>Edit Data Upload</DialogTitle>
+            </DialogHeader>
+            <Form {...editForm}>
+                <form onSubmit={editForm.handleSubmit(handleUpdateSubmission)} className="space-y-4 py-4">
+                    <FormField
+                        control={editForm.control}
+                        name="name"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Nama</FormLabel>
+                                <FormControl>
+                                    <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={editForm.control}
+                        name="description"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Deskripsi</FormLabel>
+                                <FormControl>
+                                    <Textarea className="resize-none" rows={5} {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="secondary">Batal</Button>
+                        </DialogClose>
+                        <Button type="submit">Simpan Perubahan</Button>
+                    </DialogFooter>
+                </form>
+            </Form>
+        </DialogContent>
+    </Dialog>
+    </>
   );
 }
+
+    

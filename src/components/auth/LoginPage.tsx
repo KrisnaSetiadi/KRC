@@ -60,10 +60,12 @@ export function LoginPage() {
 
   return (
     <main 
-      className="flex min-h-screen flex-col items-center justify-center p-4 bg-background"
+      className="flex min-h-screen flex-col items-center justify-center p-4 bg-cover bg-center"
+      style={{ backgroundImage: "url('https://i.ibb.co/1thY6rpr/Whats-App-Image-2025-08-14-at-11-29-28-fbf0ce79.jpg')" }}
     >
-      <div className="w-full max-w-md">
-        <Card>
+      <div className="absolute inset-0 bg-black/50" />
+      <div className="w-full max-w-md z-10">
+        <Card className="bg-card/90">
             <CardHeader className="items-center text-center">
               <div className="p-4 bg-primary/10 rounded-full mb-4">
                   <KeyRound className="w-12 h-12 text-primary"/>

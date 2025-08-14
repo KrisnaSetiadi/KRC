@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm, type SubmitHandler } from "react-hook-form";
@@ -80,80 +81,86 @@ export function RegisterPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Buat Akun Pengguna</CardTitle>
-          <CardDescription>Masukkan detail Anda untuk mendaftar.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-               <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nama</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John Doe" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="division"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Divisi</FormLabel>
-                    <FormControl>
-                      <Input placeholder="cth. Pemasaran" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="nama@contoh.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kata Sandi</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" className="w-full">
-                Daftar
-              </Button>
-            </form>
-          </Form>
-          <div className="mt-4 text-center text-sm">
-            Sudah punya akun?{" "}
-            <Link href="/login" className="underline">
-              Masuk
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+    <main 
+      className="flex min-h-screen flex-col items-center justify-center p-4 bg-cover bg-center"
+      style={{ backgroundImage: "url('https://i.ibb.co/1thY6rpr/Whats-App-Image-2025-08-14-at-11-29-28-fbf0ce79.jpg')" }}
+    >
+      <div className="absolute inset-0 bg-black/50" />
+      <div className="w-full max-w-md z-10">
+        <Card className="bg-card/90">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Buat Akun Pengguna</CardTitle>
+            <CardDescription>Masukkan detail Anda untuk mendaftar.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                 <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nama</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Doe" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="division"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Divisi</FormLabel>
+                      <FormControl>
+                        <Input placeholder="cth. Pemasaran" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input placeholder="nama@contoh.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Kata Sandi</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="••••••••" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full">
+                  Daftar
+                </Button>
+              </form>
+            </Form>
+            <div className="mt-4 text-center text-sm">
+              Sudah punya akun?{" "}
+              <Link href="/login" className="underline">
+                Masuk
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

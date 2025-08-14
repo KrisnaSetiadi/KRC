@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useContext, useEffect } from "react";
@@ -39,11 +40,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col">
-      <DashboardHeader />
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-          {children}
-      </main>
+    <div 
+      className="flex min-h-screen w-full flex-col bg-cover bg-center bg-fixed"
+      style={{ backgroundImage: "url('https://i.ibb.co/h1xnFfHM/Whats-App-Image-2025-08-14-at-11-29-15-8a44bb41.jpg')" }}
+    >
+      <div className="flex min-h-screen w-full flex-col bg-black/50">
+        <DashboardHeader />
+        <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+            {children}
+        </main>
+      </div>
     </div>
   );
 }

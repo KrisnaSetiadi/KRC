@@ -1,12 +1,18 @@
+
 "use client";
 import React, { useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AuthContext } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Users, FileText } from "lucide-react";
+import { LogOut, Users, FileText, Menu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 export function DashboardHeader() {
   const authContext = useContext(AuthContext);
@@ -29,20 +35,50 @@ export function DashboardHeader() {
       </div>
 
       {role === 'admin' && (
-        <nav className="hidden md:flex items-center gap-5 text-sm font-medium text-muted-foreground ml-6">
+        <>
+        <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6 ml-6">
           {navItems.map((item) => (
              <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
                     "transition-colors hover:text-foreground",
-                    pathname.startsWith(item.href) ? "text-foreground font-semibold" : ""
+                    pathname.startsWith(item.href) ? "text-foreground font-semibold" : "text-muted-foreground"
                 )}
                 >
                 {item.label}
             </Link>
           ))}
         </nav>
+        <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 md:hidden"
+              >
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Alihkan menu navigasi</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left">
+              <nav className="grid gap-6 text-lg font-medium">
+                <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
+                  <span className="font-bold font-headline text-primary">Apps KRC</span>
+                </Link>
+                 {navItems.map((item) => (
+                    <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn("hover:text-foreground", pathname.startsWith(item.href) ? "text-foreground" : "text-muted-foreground")}
+                    >
+                        {item.label}
+                    </Link>
+                 ))}
+              </nav>
+            </SheetContent>
+          </Sheet>
+        </>
       )}
 
       <div className="flex items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
@@ -58,3 +94,5 @@ export function DashboardHeader() {
     </header>
   );
 }
+
+    
