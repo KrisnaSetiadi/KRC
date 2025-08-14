@@ -1,8 +1,6 @@
-
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -22,20 +20,11 @@ const nextConfig: NextConfig = {
         hostname: 'i.ibb.co',
         port: '',
         pathname: '/**',
-      }
+      },
     ],
   },
-  webpack: (config, { isServer }) => {
-    // Mengabaikan next.config.js untuk mencegah restart yang tidak perlu
-    config.watchOptions.ignored = /next\.config\.ts/;
-    return config;
-  },
-  experimental: {
-    // Mengizinkan origin dari Cloud Workstations untuk pengembangan
-    allowedDevOrigins: [
-        "*.cloudworkstations.dev",
-    ]
-  }
+  // HAPUS: webpack(...) yang memodifikasi watchOptions
+  // HAPUS: experimental.allowedDevOrigins
 };
 
 export default nextConfig;
