@@ -37,7 +37,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
-import { format, subDays, startOfMonth, endOfMonth, startOfYesterday, endOfYesterday } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -58,8 +58,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Document, Packer, Paragraph, TextRun, ImageRun } from 'docx';
 import { saveAs } from 'file-saver';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Separator } from "../ui/separator";
+import { getAllSubmissions, updateSubmission, deleteSubmission } from "@/lib/services";
 
 type SortKey = keyof Omit<Submission, 'images'> | "";
 type SortDirection = "asc" | "desc";
@@ -72,6 +71,7 @@ const editSubmissionSchema = z.object({
 
 export function SubmissionTable() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
@@ -92,9 +92,16 @@ export function SubmissionTable() {
     resolver: zodResolver(editSubmissionSchema),
   });
 
-  const fetchSubmissions = () => {
-    const storedSubmissions: Submission[] = JSON.parse(localStorage.getItem("submissions") || "[]");
-    setSubmissions(storedSubmissions);
+  const fetchSubmissions = async () => {
+    setLoading(true);
+    try {
+      const allSubmissions = await getAllSubmissions();
+      setSubmissions(allSubmissions);
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to fetch submissions.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -112,11 +119,11 @@ export function SubmissionTable() {
   };
 
   const downloadImages = (submission: Submission) => {
-    submission.images.forEach((imageDataUrl, index) => {
+    submission.images.forEach((imageUrl, index) => {
         const link = document.createElement("a");
-        link.href = imageDataUrl;
-        const fileExtension = imageDataUrl.split(';')[0].split('/')[1];
-        link.download = `submission-${submission.userName.replace(/\s+/g, '_')}-${submission.id.substring(0,8)}-image-${index + 1}.${fileExtension}`;
+        link.href = imageUrl;
+        link.target = "_blank"; // Open in new tab to download
+        link.download = `submission-${submission.userName.replace(/\s+/g, '_')}-${submission.id.substring(0,8)}-image-${index + 1}.jpg`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -251,11 +258,10 @@ export function SubmissionTable() {
     }
   };
 
-  const deleteSubmissions = (ids: string[]) => {
+  const deleteSubmissions = async (ids: string[]) => {
     try {
-      const updatedSubmissions = submissions.filter(s => !ids.includes(s.id));
-      localStorage.setItem("submissions", JSON.stringify(updatedSubmissions));
-      setSubmissions(updatedSubmissions);
+      await Promise.all(ids.map(id => deleteSubmission(id)));
+      await fetchSubmissions();
       setSelectedSubmissions([]);
       toast({
         title: "Sukses",
@@ -279,17 +285,15 @@ export function SubmissionTable() {
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdateSubmission = (values: z.infer<typeof editSubmissionSchema>) => {
+  const handleUpdateSubmission = async (values: z.infer<typeof editSubmissionSchema>) => {
     if (!selectedSubmission) return;
     try {
-      const updatedSubmissions = submissions.map(s => {
-        if (s.id === selectedSubmission.id) {
-          return { ...s, userName: values.userName, description: values.description, timestamp: new Date().toISOString() };
-        }
-        return s;
+      await updateSubmission(selectedSubmission.id, {
+        userName: values.userName,
+        description: values.description,
+        timestamp: new Date().toISOString()
       });
-      localStorage.setItem("submissions", JSON.stringify(updatedSubmissions));
-      setSubmissions(updatedSubmissions);
+      await fetchSubmissions();
       setIsEditDialogOpen(false);
       toast({
         title: "Sukses",
@@ -495,7 +499,13 @@ export function SubmissionTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAndSortedSubmissions.length > 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={Object.values(columnVisibility).filter(v => v).length + 2} className="h-24 text-center">
+                    Memuat data...
+                  </TableCell>
+                </TableRow>
+              ) : filteredAndSortedSubmissions.length > 0 ? (
                 filteredAndSortedSubmissions.map((submission) => (
                   <TableRow key={submission.id} data-state={selectedSubmissions.includes(submission.id) ? "selected" : undefined}>
                     <TableCell className="px-4">
@@ -636,5 +646,3 @@ export function SubmissionTable() {
     </>
   );
 }
-
-    

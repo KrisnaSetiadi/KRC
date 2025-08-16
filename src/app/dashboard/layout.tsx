@@ -6,6 +6,7 @@ import { AuthContext } from "@/context/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
 import { Skeleton } from "@/components/ui/skeleton";
+import Image from "next/image";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const authContext = useContext(AuthContext);
@@ -40,11 +41,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div 
-      className="flex min-h-screen w-full flex-col bg-cover bg-center bg-fixed"
-      style={{ backgroundImage: "url('https://i.ibb.co/h1xnFfHM/Whats-App-Image-2025-08-14-at-11-29-15-8a44bb41.jpg')" }}
-    >
-      <div className="flex min-h-screen w-full flex-col bg-black/50">
+    <div className="relative flex min-h-screen w-full flex-col">
+       <Image
+          src="https://i.ibb.co/h1xnFfHM/Whats-App-Image-2025-08-14-at-11-29-15-8a44bb41.jpg"
+          alt="Dashboard Background"
+          layout="fill"
+          objectFit="cover"
+          className="absolute inset-0 z-0"
+        />
+        <div className="absolute inset-0 z-10 bg-black/50" />
+      <div className="relative z-20 flex min-h-screen w-full flex-col bg-transparent">
         <DashboardHeader />
         <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
             {children}

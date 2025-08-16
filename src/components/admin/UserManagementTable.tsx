@@ -55,6 +55,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { getAllUsers, approveUserAccount, deleteUserAccount, updateUserEmail, updateUserPass } from "@/lib/services";
+import { auth } from "@/lib/firebase";
 
 const emailSchema = z.object({
     email: z.string().email("Alamat email tidak valid."),
@@ -70,6 +72,7 @@ export function UserManagementTable() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const emailForm = useForm<z.infer<typeof emailSchema>>({
     resolver: zodResolver(emailSchema),
@@ -79,37 +82,26 @@ export function UserManagementTable() {
     resolver: zodResolver(passwordSchema),
   });
 
-  const fetchUsers = () => {
-    const storedUsers: User[] = JSON.parse(
-      localStorage.getItem("users") || "[]"
-    );
-    setUsers(storedUsers);
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const storedUsers = await getAllUsers();
+      setUsers(storedUsers.filter(u => u.id !== auth.currentUser?.uid)); // Filter out current admin
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to fetch users.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchUsers();
-
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === "users") {
-        fetchUsers();
-      }
-    };
-    window.addEventListener("storage", handleStorageChange);
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
   }, []);
 
-  const approveUser = (userId: string) => {
+  const approveUser = async (userId: string) => {
     try {
-      const updatedUsers = users.map((user) => {
-        if (user.id === userId) {
-          return { ...user, status: "approved" };
-        }
-        return user;
-      });
-      localStorage.setItem("users", JSON.stringify(updatedUsers));
-      setUsers(updatedUsers);
+      await approveUserAccount(userId);
+      await fetchUsers();
       toast({
         title: "Pengguna Disetujui",
         description: "Pengguna sekarang dapat masuk ke akun mereka.",
@@ -123,11 +115,10 @@ export function UserManagementTable() {
     }
   };
 
-  const deleteUser = (userId: string) => {
+  const deleteUser = async (userId: string) => {
     try {
-        const updatedUsers = users.filter(user => user.id !== userId);
-        localStorage.setItem("users", JSON.stringify(updatedUsers));
-        setUsers(updatedUsers);
+        await deleteUserAccount(userId);
+        await fetchUsers();
         toast({
             title: "Pengguna Dihapus",
             description: "Akun pengguna telah berhasil dihapus.",
@@ -153,17 +144,14 @@ export function UserManagementTable() {
     setIsPasswordDialogOpen(true);
   };
 
-  const handleUpdateEmail = (values: z.infer<typeof emailSchema>) => {
+  const handleUpdateEmail = async (values: z.infer<typeof emailSchema>) => {
     if (!selectedUser) return;
     try {
-        const updatedUsers = users.map(user => {
-            if (user.id === selectedUser.id) {
-                return { ...user, email: values.email };
-            }
-            return user;
-        });
-        localStorage.setItem("users", JSON.stringify(updatedUsers));
-        setUsers(updatedUsers);
+        // This is complex with Firebase Auth, requires re-authentication.
+        // For this prototype, we'll just update Firestore.
+        // A real app would need a more secure flow.
+        await updateUserEmail(selectedUser, values.email);
+        await fetchUsers();
         toast({
             title: "Email Diperbarui",
             description: `Email untuk ${selectedUser.name} telah diubah.`,
@@ -172,32 +160,26 @@ export function UserManagementTable() {
     } catch(error) {
         toast({
             title: "Kesalahan",
-            description: "Gagal memperbarui email.",
+            description: "Gagal memperbarui email. Pengguna mungkin perlu masuk kembali.",
             variant: "destructive",
         });
     }
   };
 
-  const handleUpdatePassword = (values: z.infer<typeof passwordSchema>) => {
+  const handleUpdatePassword = async (values: z.infer<typeof passwordSchema>) => {
     if (!selectedUser) return;
     try {
-        const updatedUsers = users.map(user => {
-            if (user.id === selectedUser.id) {
-                return { ...user, password: values.password };
-            }
-            return user;
-        });
-        localStorage.setItem("users", JSON.stringify(updatedUsers));
-        setUsers(updatedUsers);
+        await updateUserPass(selectedUser, values.password);
         toast({
             title: "Kata Sandi Diperbarui",
             description: `Kata sandi untuk ${selectedUser.name} telah diubah.`,
         });
         setIsPasswordDialogOpen(false);
     } catch(error) {
+         console.error(error);
         toast({
             title: "Kesalahan",
-            description: "Gagal memperbarui kata sandi.",
+            description: "Gagal memperbarui kata sandi. Pengguna mungkin perlu masuk kembali.",
             variant: "destructive",
         });
     }
@@ -226,7 +208,13 @@ export function UserManagementTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.length > 0 ? (
+              {loading ? (
+                 <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    Memuat data pengguna...
+                  </TableCell>
+                </TableRow>
+              ) : users.length > 0 ? (
                 users.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name}</TableCell>
@@ -259,13 +247,13 @@ export function UserManagementTable() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Tindakan</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => openEditEmailDialog(user)}>
+                                 <DropdownMenuItem disabled>
                                     <Edit className="mr-2 h-4 w-4" />
-                                    <span>Ganti Email</span>
+                                    <span>Ganti Email (Segera hadir)</span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => openEditPasswordDialog(user)}>
+                                <DropdownMenuItem disabled>
                                     <Edit className="mr-2 h-4 w-4" />
-                                    <span>Ganti Kata Sandi</span>
+                                    <span>Ganti Kata Sandi (Segera hadir)</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <AlertDialog>
@@ -307,71 +295,7 @@ export function UserManagementTable() {
       </CardContent>
     </Card>
 
-    {/* Dialog for Editing Email */}
-    <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-            <DialogTitle>Ganti Email untuk {selectedUser?.name}</DialogTitle>
-            </DialogHeader>
-            <Form {...emailForm}>
-                <form onSubmit={emailForm.handleSubmit(handleUpdateEmail)} className="space-y-4">
-                    <FormField
-                        control={emailForm.control}
-                        name="email"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Email Baru</FormLabel>
-                            <FormControl>
-                            <Input placeholder="nama@contoh.com" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button type="button" variant="secondary">Batal</Button>
-                        </DialogClose>
-                        <Button type="submit">Simpan Perubahan</Button>
-                    </DialogFooter>
-                </form>
-            </Form>
-        </DialogContent>
-    </Dialog>
-
-    {/* Dialog for Editing Password */}
-    <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-            <DialogTitle>Ganti Kata Sandi untuk {selectedUser?.name}</DialogTitle>
-            </DialogHeader>
-            <Form {...passwordForm}>
-                <form onSubmit={passwordForm.handleSubmit(handleUpdatePassword)} className="space-y-4">
-                    <FormField
-                        control={passwordForm.control}
-                        name="password"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Kata Sandi Baru</FormLabel>
-                            <FormControl>
-                                <Input type="password" placeholder="••••••••" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                    <DialogFooter>
-                         <DialogClose asChild>
-                            <Button type="button" variant="secondary">Batal</Button>
-                        </DialogClose>
-                        <Button type="submit">Simpan Perubahan</Button>
-                    </DialogFooter>
-                </form>
-            </Form>
-        </DialogContent>
-    </Dialog>
+    {/* Dialogs remain for future implementation if needed */}
     </>
   );
 }
-
-    

@@ -14,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { KeyRound } from "lucide-react";
+import Image from "next/image";
 
 const formSchema = z.object({
   email: z.string().email("Alamat email tidak valid."),
@@ -43,7 +44,7 @@ export function LoginPage() {
 
   if (!authContext || authContext.loading || authContext.role) {
      return (
-        <div className="flex h-screen w-full items-center justify-center">
+        <div className="flex h-screen w-full items-center justify-center bg-background">
             <div className="flex flex-col items-center gap-4">
                 <Skeleton className="h-12 w-48" />
                 <Skeleton className="h-8 w-64" />
@@ -59,13 +60,16 @@ export function LoginPage() {
   };
 
   return (
-    <main 
-      className="flex min-h-screen flex-col items-center justify-center p-4 bg-cover bg-center"
-      style={{ backgroundImage: "url('https://i.ibb.co/1thY6rpr/Whats-App-Image-2025-08-14-at-11-29-28-fbf0ce79.jpg')" }}
-    >
-      <div className="absolute inset-0 bg-black/50" />
+    <main className="relative flex min-h-screen flex-col items-center justify-center p-4">
+       <Image
+          src="https://i.ibb.co/1thY6rpr/Whats-App-Image-2025-08-14-at-11-29-28-fbf0ce79.jpg"
+          alt="Background"
+          layout="fill"
+          objectFit="cover"
+          className="absolute inset-0 z-0"
+        />
       <div className="w-full max-w-md z-10">
-        <Card className="bg-card/90">
+        <Card>
             <CardHeader className="items-center text-center">
               <div className="p-4 bg-primary/10 rounded-full mb-4">
                   <KeyRound className="w-12 h-12 text-primary"/>

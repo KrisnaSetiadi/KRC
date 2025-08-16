@@ -1,11 +1,10 @@
 
 "use client";
 
-import { useContext, useState } from "react";
+import { useState } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,8 +13,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Upload, X } from "lucide-react";
-import type { Submission } from "@/lib/types";
-import { AuthContext } from "@/context/AuthContext";
+import type { UnsavedSubmission } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
+import { createSubmission } from "@/lib/services";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_FILES = 5;
@@ -34,9 +34,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function SubmissionForm() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const authContext = useContext(AuthContext);
+  const { currentUser } = useAuth();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -70,11 +69,6 @@ export function SubmissionForm() {
             };
             reader.readAsDataURL(file);
         });
-
-        const dataTransfer = new DataTransfer();
-        const existingFiles = Array.from(form.getValues("images") || []);
-        [...existingFiles, ...filesArray].forEach(file => dataTransfer.items.add(file));
-        form.setValue("images", dataTransfer.files, { shouldValidate: true });
     }
   };
 
@@ -92,7 +86,7 @@ export function SubmissionForm() {
   };
 
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
-    if (!authContext?.currentUser) {
+    if (!currentUser) {
        toast({
         title: "Kesalahan",
         description: "Tidak dapat mengidentifikasi pengguna. Silakan login kembali.",
@@ -100,20 +94,17 @@ export function SubmissionForm() {
       });
       return;
     }
-    setIsSubmitting(true);
+    
     try {
-      const newSubmission: Submission = {
-        id: uuidv4(),
-        userId: authContext.currentUser.id,
-        userName: authContext.currentUser.name,
-        userDivision: authContext.currentUser.division,
+      const newSubmission: UnsavedSubmission = {
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userDivision: currentUser.division,
         description: data.description,
-        images: imagePreviews,
-        timestamp: new Date().toISOString(),
+        images: imagePreviews, // These are data URLs
       };
 
-      const existingSubmissions: Submission[] = JSON.parse(localStorage.getItem("submissions") || "[]");
-      localStorage.setItem("submissions", JSON.stringify([newSubmission, ...existingSubmissions]));
+      await createSubmission(newSubmission);
       
       toast({
         title: "Berhasil!",
@@ -122,14 +113,16 @@ export function SubmissionForm() {
 
       form.reset();
       setImagePreviews([]);
+      // Trigger a refresh or state update in the UserSubmissions component
+      window.dispatchEvent(new Event('storage'));
+
     } catch (error) {
+       console.error(error);
       toast({
         title: "Kesalahan",
         description: "Terjadi kesalahan. Silakan coba lagi.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -185,8 +178,8 @@ export function SubmissionForm() {
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isSubmitting || !authContext?.currentUser} className="w-full sm:w-auto">
-              {isSubmitting ? "Mengirim..." : "Kirim Formulir"}
+            <Button type="submit" disabled={form.formState.isSubmitting || !currentUser} className="w-full sm:w-auto">
+              {form.formState.isSubmitting ? "Mengirim..." : "Kirim Formulir"}
             </Button>
           </form>
         </Form>

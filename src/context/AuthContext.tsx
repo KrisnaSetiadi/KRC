@@ -3,111 +3,131 @@
 
 import type { UserRole, User } from "@/lib/types";
 import { useRouter } from "next/navigation";
-import React, { createContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useState, useEffect, ReactNode, useContext } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, getUser } from "@/lib/services";
+import { auth } from "@/lib/firebase";
 
 interface AuthContextType {
-  role: UserRole | null;
   currentUser: User | null;
+  role: UserRole | null;
+  loading: boolean;
   login: (credentials: Pick<User, 'email' | 'password'>) => void;
   logout: () => void;
-  loading: boolean;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Kredensial admin statis untuk tujuan prototipe
-const adminUsers = [
-  { id: 'admin-1', name: 'Admin KRC', division: 'IT', email: "admin@appskrc.com", password: "adminpassword", status: 'approved' as const },
-  { id: 'admin-2', name: 'Admin Cibodas', division: 'IT', email: "Krc@gmail.com", password: "@Kebunrayacibodas11", status: 'approved' as const },
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}
+
+const adminEmails = [
+  "admin@appskrc.com",
+  "Krc@gmail.com"
 ];
 
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<UserRole | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
 
   useEffect(() => {
-    try {
-      const storedRole = localStorage.getItem("userRole") as UserRole | null;
-      const storedUser = localStorage.getItem("currentUser");
-      if (storedRole) {
-        setRole(storedRole);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userData = await getUser(user.uid);
+        if (userData) {
+          setCurrentUser(userData);
+          setRole(userData.role || 'user');
+        } else {
+          // User exists in Auth but not in Firestore, treat as an error state
+          setCurrentUser(null);
+          setRole(null);
+          await signOut(auth);
+        }
+      } else {
+        setCurrentUser(null);
+        setRole(null);
       }
-      if (storedUser) {
-        setCurrentUser(JSON.parse(storedUser));
-      }
-    } catch (error) {
-      console.error("Gagal mengakses localStorage", error);
-    } finally {
       setLoading(false);
-    }
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const login = (credentials: Pick<User, 'email' | 'password'>) => {
+ const login = async (credentials: Pick<User, 'email' | 'password'>) => {
     setLoading(true);
+    try {
+      if (!credentials.password) {
+        toast({ title: "Login Gagal", description: "Kata sandi diperlukan.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
 
-    // Cek kredensial admin
-    const adminUser = adminUsers.find(
-        (admin) => admin.email === credentials.email && admin.password === credentials.password
-    );
+      const userCredential = await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
+      const user = userCredential.user;
+      
+      const userData = await getUser(user.uid);
 
-    if (adminUser) {
-      const adminData: User = { ...adminUser, role: 'admin' };
-      localStorage.setItem("userRole", 'admin');
-      localStorage.setItem("currentUser", JSON.stringify(adminData));
-      setRole('admin');
-      setCurrentUser(adminData);
-      router.push(`/dashboard/admin`);
-      setLoading(false);
-      return;
-    }
+      if (userData) {
+        if (userData.status === 'approved') {
+          const userRole = adminEmails.includes(userData.email) ? 'admin' : 'user';
+          await updateDoc(doc(db, "users", user.uid), { role: userRole });
 
-    // Cek kredensial pengguna
-    const storedUsers: User[] = JSON.parse(localStorage.getItem("users") || "[]");
-    const foundUser = storedUsers.find(
-      (user) => user.email === credentials.email && user.password === credentials.password
-    );
-
-    if (foundUser) {
-      if (foundUser.status === 'approved') {
-        localStorage.setItem("userRole", 'user');
-        localStorage.setItem("currentUser", JSON.stringify(foundUser));
-        setRole('user');
-        setCurrentUser(foundUser);
-        router.push(`/dashboard/user`);
+          setCurrentUser({ ...userData, role: userRole });
+          setRole(userRole);
+          
+          if (userRole === 'admin') {
+            router.push('/dashboard/admin');
+          } else {
+            router.push('/dashboard/user');
+          }
+        } else {
+          await signOut(auth);
+          toast({
+            title: "Login Gagal",
+            description: "Akun Anda sedang menunggu persetujuan dari administrator.",
+            variant: "destructive",
+          });
+        }
       } else {
-         toast({
+        // This case should ideally not happen if registration is done correctly
+        await signOut(auth);
+        toast({
           title: "Login Gagal",
-          description: "Akun Anda sedang menunggu persetujuan dari administrator.",
+          description: "Data pengguna tidak ditemukan.",
           variant: "destructive",
         });
       }
-    } else {
-      // Jika bukan admin dan tidak ditemukan pengguna biasa
+    } catch (error: any) {
+      console.error(error);
       toast({
         title: "Login Gagal",
         description: "Email atau kata sandi tidak valid.",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
-  const logout = () => {
-    localStorage.removeItem("userRole");
-    localStorage.removeItem("currentUser");
-    setRole(null);
+
+  const logout = async () => {
+    setLoading(true);
+    await signOut(auth);
     setCurrentUser(null);
+    setRole(null);
     router.push("/login");
     setLoading(false);
   };
 
-  const value = { role, currentUser, login, logout, loading };
+  const value = { currentUser, role, loading, login, logout };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

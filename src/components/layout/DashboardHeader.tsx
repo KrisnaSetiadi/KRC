@@ -29,9 +29,9 @@ export function DashboardHeader() {
   ];
 
   return (
-    <header className="sticky top-0 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 z-50">
+    <header className="sticky top-0 flex h-16 items-center gap-4 border-b border-white/20 bg-background/5 backdrop-blur-lg px-4 md:px-6 z-50 text-white">
       <div className="flex items-center gap-2 text-lg font-semibold md:text-base">
-        <Link href="/" className="font-bold font-headline text-primary">Apps KRC</Link>
+        <Link href="/" className="font-bold font-headline text-white">Apps KRC</Link>
       </div>
 
       {role === 'admin' && (
@@ -42,8 +42,8 @@ export function DashboardHeader() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                    "transition-colors hover:text-foreground",
-                    pathname.startsWith(item.href) ? "text-foreground font-semibold" : "text-muted-foreground"
+                    "transition-colors hover:text-white",
+                    pathname.startsWith(item.href) ? "text-white font-semibold" : "text-white/70"
                 )}
                 >
                 {item.label}
@@ -55,22 +55,22 @@ export function DashboardHeader() {
               <Button
                 variant="outline"
                 size="icon"
-                className="shrink-0 md:hidden"
+                className="shrink-0 md:hidden bg-transparent border-white/50 hover:bg-white/10"
               >
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Alihkan menu navigasi</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left">
+            <SheetContent side="left" className="bg-background/80 backdrop-blur-lg text-white border-r-white/20">
               <nav className="grid gap-6 text-lg font-medium">
                 <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
-                  <span className="font-bold font-headline text-primary">Apps KRC</span>
+                  <span className="font-bold font-headline text-white">Apps KRC</span>
                 </Link>
                  {navItems.map((item) => (
                     <Link
                         key={item.href}
                         href={item.href}
-                        className={cn("hover:text-foreground", pathname.startsWith(item.href) ? "text-foreground" : "text-muted-foreground")}
+                        className={cn("hover:text-white", pathname.startsWith(item.href) ? "text-white" : "text-white/70")}
                     >
                         {item.label}
                     </Link>
@@ -83,16 +83,14 @@ export function DashboardHeader() {
 
       <div className="flex items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
         {role && (
-          <Badge variant="secondary" className="capitalize text-sm">
+          <Badge variant="outline" className="capitalize text-sm bg-transparent border-white/50 text-white">
             {role === 'admin' ? 'Admin' : 'Pengguna'}
           </Badge>
         )}
-        <Button variant="ghost" size="icon" onClick={logout} aria-label="Keluar">
+        <Button variant="ghost" size="icon" onClick={logout} aria-label="Keluar" className="hover:bg-white/10">
           <LogOut className="h-5 w-5" />
         </Button>
       </div>
     </header>
   );
 }
-
-    

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import type { Submission } from "@/lib/types";
 import {
   Card,
@@ -26,44 +26,46 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { AuthContext } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../ui/dropdown-menu";
 import { Download, FileText, FileType } from "lucide-react";
 import { Document, Packer, Paragraph, TextRun, ImageRun } from 'docx';
 import { saveAs } from 'file-saver';
+import { getSubmissionsByUserId } from "@/lib/services";
+import { useToast } from "@/hooks/use-toast";
 
 export function UserSubmissions() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const authContext = useContext(AuthContext);
+  const { currentUser } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchSubmissions = async () => {
+    if (!currentUser) return;
+    setLoading(true);
+    try {
+      const userSubmissions = await getSubmissionsByUserId(currentUser.id);
+      setSubmissions(userSubmissions.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to fetch submissions.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!authContext?.currentUser) return;
-
-    const allSubmissions: Submission[] = JSON.parse(
-      localStorage.getItem("submissions") || "[]"
-    );
-    const userSubmissions = allSubmissions.filter(
-        sub => sub.userId === authContext.currentUser!.id
-    );
-    setSubmissions(userSubmissions);
+    fetchSubmissions();
 
     const handleStorageChange = () => {
-        const updatedAllSubmissions: Submission[] = JSON.parse(
-            localStorage.getItem("submissions") || "[]"
-        );
-        const updatedUserSubmissions = updatedAllSubmissions.filter(
-            sub => sub.userId === authContext.currentUser!.id
-        );
-        setSubmissions(updatedUserSubmissions);
+        fetchSubmissions();
     };
 
     window.addEventListener('storage', handleStorageChange);
-
     return () => {
         window.removeEventListener('storage', handleStorageChange);
     };
-  }, [authContext?.currentUser]);
+  }, [currentUser]);
 
   const downloadAsCSV = () => {
     if (submissions.length === 0) return;
@@ -171,7 +173,13 @@ export function UserSubmissions() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {submissions.length > 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="h-24 text-center">
+                    Memuat data...
+                  </TableCell>
+                </TableRow>
+              ) : submissions.length > 0 ? (
                 submissions.map((submission) => (
                   <TableRow key={submission.id}>
                     <TableCell>

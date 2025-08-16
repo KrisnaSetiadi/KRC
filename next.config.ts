@@ -1,4 +1,5 @@
-import type { NextConfig } from 'next';
+
+import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -20,11 +21,16 @@ const nextConfig: NextConfig = {
         hostname: 'i.ibb.co',
         port: '',
         pathname: '/**',
-      },
+      }
     ],
   },
-  // HAPUS: webpack(...) yang memodifikasi watchOptions
-  // HAPUS: experimental.allowedDevOrigins
+  experimental: {
+    // Opsi eksperimental lainnya dapat ditambahkan di sini jika diperlukan
+  },
+  // Izinkan origin dari Cloud Workstations untuk pengembangan
+  allowedDevOrigins: [
+    "*.cloudworkstations.dev",
+  ]
 };
 
 export default nextConfig;

@@ -8,5 +8,5 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="p-4 md:p-8">{children}</div>;
+  return <div className="w-full">{children}</div>;
 }

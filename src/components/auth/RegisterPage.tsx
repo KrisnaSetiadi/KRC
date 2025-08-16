@@ -4,7 +4,6 @@
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,7 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { User } from "@/lib/types";
+import { createUserAccount, getAllUsers } from "@/lib/services";
+import Image from "next/image";
 
 const formSchema = z.object({
   name: z.string().min(2, "Nama harus memiliki setidaknya 2 karakter."),
@@ -37,9 +37,9 @@ export function RegisterPage() {
     },
   });
 
-  const onSubmit: SubmitHandler<FormValues> = (data) => {
+  const onSubmit: SubmitHandler<FormValues> = async (data) => {
     try {
-      const existingUsers: User[] = JSON.parse(localStorage.getItem("users") || "[]");
+      const existingUsers = await getAllUsers();
       const userExists = existingUsers.some(user => user.email === data.email);
 
       if (userExists) {
@@ -50,19 +50,8 @@ export function RegisterPage() {
         });
         return;
       }
-
-      // PENTING: Di aplikasi nyata, JANGAN PERNAH menyimpan kata sandi dalam teks biasa.
-      // Ini harus dikirim ke backend yang aman untuk di-hash dan disimpan dalam database.
-      const newUser: User = { 
-        id: uuidv4(),
-        name: data.name,
-        division: data.division,
-        email: data.email, 
-        password: data.password,
-        status: 'pending',
-      };
-      existingUsers.push(newUser);
-      localStorage.setItem("users", JSON.stringify(existingUsers));
+      
+      await createUserAccount(data);
 
       toast({
         title: "Pendaftaran Berhasil",
@@ -72,6 +61,7 @@ export function RegisterPage() {
       router.push("/login");
 
     } catch (error) {
+       console.error(error);
       toast({
         title: "Kesalahan",
         description: "Terjadi kesalahan saat pendaftaran. Silakan coba lagi.",
@@ -81,13 +71,16 @@ export function RegisterPage() {
   };
 
   return (
-    <main 
-      className="flex min-h-screen flex-col items-center justify-center p-4 bg-cover bg-center"
-      style={{ backgroundImage: "url('https://i.ibb.co/1thY6rpr/Whats-App-Image-2025-08-14-at-11-29-28-fbf0ce79.jpg')" }}
-    >
-      <div className="absolute inset-0 bg-black/50" />
+    <main className="relative flex min-h-screen flex-col items-center justify-center p-4">
+       <Image
+          src="https://i.ibb.co/1thY6rpr/Whats-App-Image-2025-08-14-at-11-29-28-fbf0ce79.jpg"
+          alt="Background"
+          layout="fill"
+          objectFit="cover"
+          className="absolute inset-0 z-0"
+        />
       <div className="w-full max-w-md z-10">
-        <Card className="bg-card/90">
+        <Card>
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Buat Akun Pengguna</CardTitle>
             <CardDescription>Masukkan detail Anda untuk mendaftar.</CardDescription>
@@ -147,8 +140,8 @@ export function RegisterPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full">
-                  Daftar
+                <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Mendaftar..." : "Daftar"}
                 </Button>
               </form>
             </Form>

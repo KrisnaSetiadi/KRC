@@ -1,12 +1,16 @@
 export type UserRole = "admin" | "user";
 
-export interface Submission {
-  id: string;
+export interface UnsavedSubmission {
   userId: string;
   userName: string;
   userDivision: string;
-  images: string[];
+  images: string[]; // data URLs
   description: string;
+}
+
+export interface Submission extends Omit<UnsavedSubmission, 'images'> {
+  id: string;
+  images: string[]; // storage URLs
   timestamp: string;
 }
 
@@ -15,6 +19,7 @@ export interface User {
   name: string;
   division: string;
   email: string;
-  password: string; // Di aplikasi nyata, ini akan menjadi kata sandi yang di-hash
+  password?: string; // Should not be stored long-term
   status: 'pending' | 'approved';
+  role?: UserRole;
 }
